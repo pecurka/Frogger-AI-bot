@@ -164,6 +164,180 @@ class Car(pygame.sprite.Sprite):
             if (self.rect.colliderect(f) and f.dead == False):
                 f.die()
 
+class Frog(pygame.sprite.Sprite):
+    dead = False
+    fitness = 0
+
+    def __init__(self, xpos, ypos, size, brain):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((25, 25))
+        self.rect = self.image.get_rect()
+        self.rect.x = xpos
+        self.rect.y = ypos
+        self.size = size
+        self.brain = brain
+        self.image = frog
+
+    # Update frog position
+    def update(self):
+        stepNum = self.brain.step
+        if stepNum < self.size and self.dead == False:
+            if self.brain.directions[stepNum] == 1:
+                self.rect.y -= 25
+                self.fitness += 1 # Goes forward so fitness + 1
+            elif self.brain.directions[stepNum] == 2 and self.rect.y < 375:
+                self.rect.y += 25
+                self.fitness -= 1 # Goes backwards so fitness + 1
+            elif self.brain.directions[stepNum] == 3 and self.rect.x > 25:
+                self.rect.x -= 25
+            elif self.brain.directions[stepNum] == 4 and self.rect.x < 300:
+                self.rect.x += 25
+
+            self.brain.step += 1
+
+        # If frog is in the river
+        if self.rect.y <= 175 and self.rect.y != 50 and self.dead == False:
+            onLog = False
+            for x in all_sprites:
+                if x.rect.colliderect(self):
+                    onLog = True
+                    break
+            for x in turtles:
+                if x.rect.colliderect(self):
+                    onLog = True
+                    break
+            if onLog == False:
+                self.die()
+        elif self.rect.y == 50 and self.dead == False:
+            self.fitness = 13 # Finished game
+            self.dead = True # Sets so we can restart the game
+            Population.frogsAlive -= 1
+
+    # If the frog dies add changes
+    def die(self):
+        self.image = frogDead
+        self.dead = True
+        Population.frogsAlive -= 1
+
+class Population:
+    bestFrog = 0  # The index for the most fit frog
+    fitnessSum = 0  # Sum of all frogs' fitness
+    frogsAlive = frogNum  # All frogs are alive at the beginning
+    isFinished = False  # Sets to True when a frog reaches the end of the game
+    generation = 1 # Set to 1 in the beginning
+
+    def __init__(self, alive, size):
+        self.size = size # Number of directions given to a frog
+        self.alive = alive
+        self.randomize()
+
+    # Randomizes the frog's directions
+    def randomize(self):
+        for i in range(0, self.alive):
+            directions = []
+            for z in range(0, self.size):
+                randomNum = random.randint(0, 4)
+                directions.append(randomNum)
+
+            dir = FrogDirections(1000, directions)
+            frogs.add(Frog(167.5, 350, self.size, dir))
+
+    # Finding the sum of all the fitnesses from previous generation
+    def setFitnessSum(self):
+        sum = 0
+        for frog in frogs:
+            sum += frog.fitness
+        self.fitnessSum = sum
+
+    # Randomly selecting a parent frog from previous generation
+    def selectParent(self):
+        self.setFitnessSum()
+        rand = random.randint(frogNum, self.fitnessSum)
+        runningSum = 0
+        for frog in frogs:
+            runningSum += frog.fitness
+            if runningSum >= rand:
+                return frog.brain.directions
+
+    # Selecting a new generation of frogs
+    def selection(self):
+        best = list(self.bestFrogDirections())
+        newFrogs = []
+        if (self.isFinished == False):
+            dir = list(best)
+            newDirections = FrogDirections(1000, dir)
+            newFrogs.append(Frog(167.5, 350, self.size, newDirections)) # Save the best frog
+
+            for x in range(1, frogNum):
+                dir = list(self.selectParent())
+                newDirections = FrogDirections(1000, mutate(dir))
+                newFrogs.append(Frog(167.5, 350, self.size, newDirections))
+            Population.frogsAlive = frogNum
+
+            frogs.empty()
+            for frog in newFrogs:
+                frogs.add(frog)
+        else: # If a frog has gotten to the end reset his position to the start of the game
+            frogs.empty()
+            for x in range(0, 1):
+                dir = list(best)
+                directions = FrogDirections(1000, dir)
+                frogs.add(Frog(167.5, 350, self.size, directions))
+            Population.frogsAlive = 1
+
+    # Determine the best frog directions from the previous generation and return its directions
+    def bestFrogDirections(self):
+        if (self.isFinished == False):
+            sortedFrogs = []
+            for frog in frogs:
+                sortedFrogs.append(frog)
+
+            sortedFrogs.sort(key = lambda frog: frog.fitness) # Sort frogs by fitness
+
+            best = frogNum - 1
+            for i in range(0, frogNum - 1):
+                if sortedFrogs[i].brain.step < sortedFrogs[frogNum - 1].brain.step and sortedFrogs[i].fitness == sortedFrogs[frogNum - 1].fitness:
+                    best = i
+
+            if (sortedFrogs[best].fitness == 13):
+                self.isFinished = True
+            else:
+                self.generation += 1
+
+            for frog in frogs:
+                if (sortedFrogs[best].fitness == frog.fitness and sortedFrogs[best].brain.step == frog.brain.step):
+                    bestFrogDirections = list(frog.brain.directions)
+                    break
+            return bestFrogDirections
+        else:
+            for frog in frogs:
+                bestFrogDirections = list(frog.brain.directions)
+            return bestFrogDirections
+
+class FrogDirections:
+    step = 0
+    def __init__(self, size, directions):
+        self.size = size
+        self.directions = directions
+
+# Randomly mutates the direction vectors of the frog
+def mutate(d):
+    for i in range(0, len(d)):
+        randomNum = random.randint(0, 4)
+        if randomNum == 1:
+            d[i] = random.randint(0, 4)
+    return d
+
+def text_objects(text, font):
+    textSurface = font.render(text, True, white)
+    return textSurface, textSurface.get_rect()
+
+def message_display(text, position):
+    largeText = pygame.font.Font('freesansbold.ttf', 16) # default pygame font
+    TextSurf, TextRect = text_objects(text, largeText)
+    TextRect.center = ((screen_width / 2), 10 + position)
+    screen.blit(TextSurf, TextRect)
+
 # Sets and resets the game screen
 def set():
     for t in turtles:
@@ -177,12 +351,12 @@ def set():
     # (canDive, size, startX, startY, width, height, speed)
     for i in range(0, 8):
         if i < 4:
-            if i % 2 == 0: #every second turtle should be able to dive
+            if i % 3 == 0: #every third turtle should be able to dive
                 turtles.add(Turtle(2, 3, 100 * (4 - i), 175, 75, 25, -2))
             else:
                 turtles.add(Turtle(1, 3, 100 * (4 - i), 175, 75, 25, -2))
         else:
-            if i % 2 == 0:
+            if i % 3 == 0:
                 turtles.add(Turtle(2, 2, 87.5 * (8 - i), 100, 50, 25, -2))
             else:
                 turtles.add(Turtle(1, 2, 87.5 * (8 - i), 100, 50, 25, -2))
@@ -206,6 +380,7 @@ def set():
         else:
             all_sprites.add(Car(50 + 150 * (12 - i), 225, 'truck', 3, 1, 50, 25))
 
+pop = Population(frogNum, 1000) # (number of alive frogs, number of directions)
 set()
 
 # The main game loop
@@ -216,6 +391,14 @@ while not finish:
 
     screen.blit(backgroundImage, (0, 0))
 
+    # If all frogs are dead, reset game board
+    if (Population.frogsAlive == 0):
+        pop.selection()
+        set()
+        time.sleep(2.5) # Sleeps so that the frogs are given a chance to reset properly before the game restarts
+
+    message_display('Generation: ' + str(pop.generation), 0)
+    message_display('Frogs alive: ' + str(pop.frogsAlive), 18)
     all_sprites.update()
     all_sprites.draw(screen)
     turtles.update()
