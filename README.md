@@ -11,3 +11,7 @@ It uses images from the original Frogger game from 1981. The base code and sprit
 ## :computer: Run program :computer:
 
 To run the program just start the Python script by running `python frogger.py` or the equivalent command in your system.
+
+## Screenshot
+
+![alt tag](https://github.com/pecurka/Frogger-AI-bot/blob/master/screenshots/screenshot.png)
